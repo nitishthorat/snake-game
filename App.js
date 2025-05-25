@@ -5,6 +5,7 @@ import {
   StyleSheet,
   PanResponder,
   TouchableOpacity,
+  Vibration,
 } from "react-native";
 import React, { useState, useRef } from "react";
 import Snake from "./components/Snake";
@@ -136,6 +137,7 @@ const App = () => {
     if (newHead.x === food.position.x && newHead.y === food.position.y) {
       snake.body = [newHead, ...snake.body];
 
+      Vibration.vibrate(20);
       food.position = generateRandomFoodPosition(snake.body);
     } else {
       snake.body = [newHead, ...snake.body.slice(0, -1)];
@@ -147,6 +149,7 @@ const App = () => {
     });
 
     if (hasCollision) {
+      Vibration.vibrate(50);
       setRunning(false); // stop the game
       return entities;
     }
