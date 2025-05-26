@@ -11,6 +11,7 @@ import React, { useState, useRef } from "react";
 import Snake from "./components/Snake";
 import { GameEngine } from "react-native-game-engine";
 import Food from "./components/Food";
+import Obstacle from "./components/Obstacle";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -38,32 +39,34 @@ const App = () => {
     { x: 3, y: 5 },
   ];
   const [running, setRunning] = useState(true);
-  const moveInterval = 250;
+  const [moveInterval, setMoveInterval] = useState(250); // starting speed
+  const MIN_INTERVAL = 50;
   const timeSinceLastMove = useRef(0);
   const directionRef = useRef("right");
   const gameEngineRef = useRef(null);
+  let foodPos = generateRandomFoodPosition(initialSnake);
+  let obstaclePositions = useRef(generateObstacles(initialSnake, foodPos));
 
   const resetGame = () => {
     directionRef.current = "right";
     timeSinceLastMove.current = 0;
+    setMoveInterval(250);
+    foodPos = generateRandomFoodPosition(initialSnake);
+    obstaclePositions.current = generateObstacles(initialSnake, foodPos);
 
     gameEngineRef.current.swap({
       snake: {
-        body: [
-          { x: 5, y: 5 },
-          { x: 4, y: 5 },
-          { x: 3, y: 5 },
-        ],
+        body: initialSnake,
         direction: "right",
         renderer: <Snake />,
       },
       food: {
-        position: generateRandomFoodPosition([
-          { x: 5, y: 5 },
-          { x: 4, y: 5 },
-          { x: 3, y: 5 },
-        ]),
+        position: foodPos,
         renderer: <Food />,
+      },
+      obstacles: {
+        positions: obstaclePositions.current,
+        renderer: <Obstacle />,
       },
     });
 
@@ -85,6 +88,30 @@ const App = () => {
     );
 
     return position;
+  }
+
+  function generateObstacles(snakeBody, foodPos, count = 5) {
+    const allPositions = [];
+
+    for (let x = 0; x < MAX_X; x++) {
+      for (let y = 0; y < MAX_Y; y++) {
+        allPositions.push({ x, y });
+      }
+    }
+
+    const isOccupied = (pos) =>
+      snakeBody.some((seg) => seg.x === pos.x && seg.y === pos.y) ||
+      (foodPos.x === pos.x && foodPos.y === pos.y);
+
+    const available = allPositions.filter((pos) => !isOccupied(pos));
+
+    // Shuffle and pick `count` positions
+    for (let i = available.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [available[i], available[j]] = [available[j], available[i]];
+    }
+
+    return available.slice(0, count);
   }
 
   const panResponder = useRef(
@@ -138,17 +165,25 @@ const App = () => {
       snake.body = [newHead, ...snake.body];
 
       Vibration.vibrate(20);
+
+      if (moveInterval > MIN_INTERVAL && moveInterval - 10 > MIN_INTERVAL) {
+        setMoveInterval(moveInterval - 10);
+      }
       food.position = generateRandomFoodPosition(snake.body);
     } else {
       snake.body = [newHead, ...snake.body.slice(0, -1)];
     }
 
-    const hasCollision = snake.body.some((segment, index) => {
+    const hasSelfCollision = snake.body.some((segment, index) => {
       // ignore the current head (index === 0)
       return index !== 0 && segment.x === newHead.x && segment.y === newHead.y;
     });
 
-    if (hasCollision) {
+    const hasObstacleCollision = obstaclePositions.current.some((segment) => {
+      return segment.x === newHead.x && segment.y === newHead.y;
+    });
+
+    if (hasSelfCollision || hasObstacleCollision) {
       Vibration.vibrate(50);
       setRunning(false); // stop the game
       return entities;
@@ -172,8 +207,12 @@ const App = () => {
               renderer: <Snake />,
             },
             food: {
-              position: generateRandomFoodPosition(initialSnake),
+              position: foodPos,
               renderer: <Food />,
+            },
+            obstacles: {
+              positions: obstaclePositions.current,
+              renderer: <Obstacle />,
             },
           }}
         />
